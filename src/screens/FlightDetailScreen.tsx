@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { Flight, fetchFlightById, fetchPlanes, Plane } from '../api/flights';
+import { City, Flight, fetchCities, fetchFlightById, fetchPlanes, Plane } from '../api/flights';
 import { Header } from '../components/Header';
 import { colors } from '../constants/colors';
-import { mockCities } from '../data/mockFlights';
 import { useBookings } from '../context/BookingContext';
+import { mockCities } from '../data/mockFlights';
 
 interface Props {
   flightId: string;
@@ -29,6 +29,7 @@ const calculateDuration = (departure: string, arrival: string) => {
 export const FlightDetailScreen: React.FC<Props> = ({ flightId, initialFlight, onBack }) => {
   const [flight, setFlight] = useState<Flight | undefined>(initialFlight);
   const [planes, setPlanes] = useState<Plane[]>([]);
+  const [cities, setCities] = useState<City[]>(mockCities);
   const [loading, setLoading] = useState(!initialFlight);
 
   const { book, cancel, getBookingByFlight } = useBookings();
@@ -38,12 +39,16 @@ export const FlightDetailScreen: React.FC<Props> = ({ flightId, initialFlight, o
     const load = async () => {
       setLoading(true);
       try {
-        const [flightResponse, planeResponse] = await Promise.all([
+        const [flightResponse, planeResponse, cityResponse] = await Promise.all([
           fetchFlightById(flightId),
           fetchPlanes(),
+          fetchCities(),
         ]);
         setFlight(flightResponse ?? initialFlight);
         setPlanes(planeResponse);
+        if (cityResponse?.length) {
+          setCities(cityResponse);
+        }
       } finally {
         setLoading(false);
       }
@@ -54,8 +59,14 @@ export const FlightDetailScreen: React.FC<Props> = ({ flightId, initialFlight, o
 
   const plane = useMemo(() => planes.find((item) => item.id === flight?.planeId), [planes, flight?.planeId]);
 
-  const fromCity = useMemo(() => mockCities.find((city) => city.id === flight?.fromCityId), [flight?.fromCityId]);
-  const toCity = useMemo(() => mockCities.find((city) => city.id === flight?.toCityId), [flight?.toCityId]);
+  const fromCity = useMemo(
+    () => cities.find((city) => city.id === flight?.fromCityId),
+    [cities, flight?.fromCityId],
+  );
+  const toCity = useMemo(
+    () => cities.find((city) => city.id === flight?.toCityId),
+    [cities, flight?.toCityId],
+  );
 
   const handleBooking = async () => {
     if (!flight) {

@@ -42,6 +42,11 @@ export interface FlightSearchParams {
   travelDate: string;
 }
 
+const createBookingId = (userId: string, flightId: string): string => {
+  const base = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `booking-${userId}-${flightId}-${base}`;
+};
+
 const mapCity = (record: CityRecord): City => ({
   id: record.id,
   name: record.name,
@@ -175,10 +180,13 @@ export const bookFlight = async (
   userId: string,
   flightId: string,
 ): Promise<BookingRecord | undefined> => {
+  const resolvedUserId = userId?.trim().length ? userId : 'u1';
+  const bookingId = createBookingId(resolvedUserId, flightId);
+
   if (!supabaseConfig.isConfigured) {
     return {
-      booking_id: `local-${userId}-${flightId}-${Date.now()}`,
-      user_id: userId,
+      booking_id: bookingId,
+      user_id: resolvedUserId,
       flight_id: flightId,
     };
   }
@@ -187,7 +195,8 @@ export const bookFlight = async (
     table: 'flight_booked',
     method: 'POST',
     body: {
-      user_id: userId,
+      booking_id: bookingId,
+      user_id: resolvedUserId,
       flight_id: flightId,
     },
     prefer: 'return=representation',
