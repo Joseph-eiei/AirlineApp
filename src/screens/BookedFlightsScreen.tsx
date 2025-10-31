@@ -6,7 +6,7 @@ import { colors } from '../constants/colors';
 import { useBookings } from '../context/BookingContext';
 
 interface Props {
-  onBack: () => void;
+  onBack?: () => void;
   onOpenFlight: (flightId: string) => void;
 }
 

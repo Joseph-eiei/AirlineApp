@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { FlightSearchParams, Flight } from '../api/flights';
@@ -6,6 +6,7 @@ import { Header } from '../components/Header';
 import { colors } from '../constants/colors';
 import { searchFlights } from '../api/flights';
 import { City } from '../data/mockFlights';
+import { useBookings } from '../context/BookingContext';
 
 interface Props {
   params: FlightSearchParams;
@@ -18,6 +19,7 @@ interface Props {
 export const FlightResultsScreen: React.FC<Props> = ({ params, fromCity, toCity, onSelectFlight, onBack }) => {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(true);
+  const { bookings } = useBookings();
 
   useEffect(() => {
     const load = async () => {
@@ -33,6 +35,14 @@ export const FlightResultsScreen: React.FC<Props> = ({ params, fromCity, toCity,
     load();
   }, [params]);
 
+  const availableFlights = useMemo(() => {
+    if (bookings.length === 0) {
+      return flights;
+    }
+    const bookedFlightIds = new Set(bookings.map((booking) => booking.flightId));
+    return flights.filter((flight) => !bookedFlightIds.has(flight.id));
+  }, [bookings, flights]);
+
   return (
     <View style={styles.container}>
       <Header title={`${fromCity.code} → ${toCity.code}`} onBack={onBack} />
@@ -41,14 +51,20 @@ export const FlightResultsScreen: React.FC<Props> = ({ params, fromCity, toCity,
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.loadingText}>Searching flights...</Text>
         </View>
-      ) : flights.length === 0 ? (
+      ) : availableFlights.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No flights found</Text>
-          <Text style={styles.emptySubtitle}>Try a different date or city pair.</Text>
+          <Text style={styles.emptyTitle}>
+            {flights.length === 0 ? 'No flights found' : 'No flights available'}
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            {flights.length === 0
+              ? 'Try a different date or city pair.'
+              : 'You have already booked every flight for this route.'}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={flights}
+          data={availableFlights}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => {

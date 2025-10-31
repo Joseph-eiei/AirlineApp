@@ -1,97 +1,108 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet, View } from 'react-native';
 
 import { Flight, FlightSearchParams } from './src/api/flights';
+import { BottomTabBar, TabKey } from './src/components/BottomTabBar';
 import { BookingProvider, useBookings } from './src/context/BookingContext';
 import { UserProvider } from './src/context/UserContext';
+import { AccountScreen } from './src/screens/AccountScreen';
+import { BookedFlightsScreen } from './src/screens/BookedFlightsScreen';
 import { FlightDetailScreen } from './src/screens/FlightDetailScreen';
 import { FlightResultsScreen } from './src/screens/FlightResultsScreen';
 import { FlightSearchScreen } from './src/screens/FlightSearchScreen';
-import { BookedFlightsScreen } from './src/screens/BookedFlightsScreen';
 import { City } from './src/data/mockFlights';
 import { colors } from './src/constants/colors';
 
-interface SearchScreenState {
-  name: 'search';
-}
+type SearchView =
+  | {
+      name: 'search';
+    }
+  | {
+      name: 'results';
+      params: FlightSearchParams;
+      fromCity: City;
+      toCity: City;
+    };
 
-interface ResultsScreenState {
-  name: 'results';
-  params: FlightSearchParams;
-  fromCity: City;
-  toCity: City;
-}
-
-interface DetailScreenState {
-  name: 'detail';
+interface DetailState {
   flightId: string;
   initialFlight?: Flight;
 }
 
-interface BookedScreenState {
-  name: 'bookings';
-}
-
-type ScreenState = SearchScreenState | ResultsScreenState | DetailScreenState | BookedScreenState;
-
 const AppNavigation: React.FC = () => {
-  const [stack, setStack] = useState<ScreenState[]>([{ name: 'search' }]);
+  const [currentTab, setCurrentTab] = useState<TabKey>('search');
+  const [searchView, setSearchView] = useState<SearchView>({ name: 'search' });
+  const [activeDetail, setActiveDetail] = useState<DetailState | undefined>();
   const { bookings } = useBookings();
 
-  const current = useMemo(() => stack[stack.length - 1], [stack]);
-
-  const push = (screen: ScreenState) => setStack((prev) => [...prev, screen]);
-  const pop = () =>
-    setStack((prev) => {
-      if (prev.length <= 1) {
-        return prev;
-      }
-      return prev.slice(0, -1);
-    });
-
   const handleSearch = (params: FlightSearchParams, context: { from: City; to: City }) => {
-    push({ name: 'results', params, fromCity: context.from, toCity: context.to });
+    setSearchView({ name: 'results', params, fromCity: context.from, toCity: context.to });
+    setCurrentTab('search');
   };
 
   const handleSelectFlight = (flight: Flight) => {
-    push({ name: 'detail', flightId: flight.id, initialFlight: flight });
-  };
-
-  const handleOpenBookings = () => {
-    push({ name: 'bookings' });
+    setActiveDetail({ flightId: flight.id, initialFlight: flight });
   };
 
   const handleOpenFlightFromBooking = (flightId: string) => {
     const booking = bookings.find((item) => item.flightId === flightId);
-    push({ name: 'detail', flightId, initialFlight: booking?.flight });
+    setActiveDetail({ flightId, initialFlight: booking?.flight });
+  };
+
+  const handleCloseDetail = () => {
+    setActiveDetail(undefined);
+  };
+
+  const renderSearchTab = () => {
+    if (searchView.name === 'search') {
+      return (
+        <FlightSearchScreen
+          onSearch={handleSearch}
+          onOpenBookings={() => {
+            setCurrentTab('bookings');
+          }}
+        />
+      );
+    }
+
+    return (
+      <FlightResultsScreen
+        params={searchView.params}
+        fromCity={searchView.fromCity}
+        toCity={searchView.toCity}
+        onSelectFlight={handleSelectFlight}
+        onBack={() => setSearchView({ name: 'search' })}
+      />
+    );
+  };
+
+  const renderContent = () => {
+    switch (currentTab) {
+      case 'search':
+        return renderSearchTab();
+      case 'bookings':
+        return <BookedFlightsScreen onOpenFlight={handleOpenFlightFromBooking} />;
+      case 'account':
+        return <AccountScreen />;
+      default:
+        return null;
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      <View style={styles.container}>
-        {current.name === 'search' && (
-          <FlightSearchScreen onSearch={handleSearch} onOpenBookings={handleOpenBookings} />
-        )}
-
-        {current.name === 'results' && (
-          <FlightResultsScreen
-            params={current.params}
-            fromCity={current.fromCity}
-            toCity={current.toCity}
-            onSelectFlight={handleSelectFlight}
-            onBack={pop}
+      <StatusBar barStyle='dark-content' backgroundColor={colors.background} />
+      <View style={styles.content}>{renderContent()}</View>
+      <BottomTabBar currentTab={currentTab} onSelect={setCurrentTab} />
+      {activeDetail && (
+        <View style={styles.detailOverlay}>
+          <FlightDetailScreen
+            flightId={activeDetail.flightId}
+            initialFlight={activeDetail.initialFlight}
+            onBack={handleCloseDetail}
           />
-        )}
-
-        {current.name === 'detail' && (
-          <FlightDetailScreen flightId={current.flightId} initialFlight={current.initialFlight} onBack={pop} />
-        )}
-
-        {current.name === 'bookings' && (
-          <BookedFlightsScreen onBack={pop} onOpenFlight={handleOpenFlightFromBooking} />
-        )}
-      </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -111,8 +122,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  container: {
+  content: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  detailOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.background,
   },
 });
