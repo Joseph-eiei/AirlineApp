@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { fetchCities, City, FlightSearchParams } from '../api/flights';
 import { Header } from '../components/Header';
@@ -18,54 +19,22 @@ interface Props {
   onOpenBookings: () => void;
 }
 
-interface CitySelectProps {
-  label: string;
-  selectedCity?: City;
-  cities: City[];
-  onSelect: (city: City) => void;
-}
+const daysInDecember = Array.from({ length: 31 }, (_, index) => index + 1);
+const firstWeekdayOffset = new Date('2025-12-01T00:00:00').getDay();
+const totalWeeks = Math.ceil((firstWeekdayOffset + daysInDecember.length) / 7);
 
-const CitySelect: React.FC<CitySelectProps> = ({ label, selectedCity, cities, onSelect }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const buildTravelDate = (day: number) => `2025-12-${String(day).padStart(2, '0')}`;
 
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TouchableOpacity style={styles.select} onPress={() => setIsOpen(true)}>
-        <Text style={styles.selectText}>{selectedCity ? `${selectedCity.name} (${selectedCity.code})` : 'Choose city'}</Text>
-      </TouchableOpacity>
-      <Modal visible={isOpen} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{label}</Text>
-              <TouchableOpacity onPress={() => setIsOpen(false)}>
-                <Text style={styles.modalClose}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={cities}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => {
-                    onSelect(item);
-                    setIsOpen(false);
-                  }}
-                >
-                  <Text style={styles.modalItemText}>{`${item.name} (${item.code})`}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+const formatTravelDate = (day: number) => {
+  const date = new Date(`${buildTravelDate(day)}T00:00:00`);
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 };
 
-const days = Array.from({ length: 31 }, (_, index) => index + 1);
+const formatCityDisplay = (city?: City) => (city ? `${city.name} (${city.code})` : 'Choose city');
 
 export const FlightSearchScreen: React.FC<Props> = ({ onSearch, onOpenBookings }) => {
   const [cities, setCities] = useState<City[]>([]);
@@ -73,6 +42,8 @@ export const FlightSearchScreen: React.FC<Props> = ({ onSearch, onOpenBookings }
   const [fromCity, setFromCity] = useState<City>();
   const [toCity, setToCity] = useState<City>();
   const [selectedDay, setSelectedDay] = useState<number>(1);
+  const [cityPicker, setCityPicker] = useState<'from' | 'to' | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -89,22 +60,35 @@ export const FlightSearchScreen: React.FC<Props> = ({ onSearch, onOpenBookings }
     load();
   }, []);
 
-  const isValid = useMemo(() => {
-    return Boolean(fromCity && toCity && fromCity.id !== toCity.id);
-  }, [fromCity, toCity]);
+  const isValid = useMemo(() => Boolean(fromCity && toCity && fromCity.id !== toCity.id), [fromCity, toCity]);
+
+  const travelDateLabel = useMemo(() => formatTravelDate(selectedDay), [selectedDay]);
 
   const handleSearch = () => {
     if (!fromCity || !toCity) {
       return;
     }
 
-    const travelDate = `2025-12-${String(selectedDay).padStart(2, '0')}`;
     const params: FlightSearchParams = {
       fromCityId: fromCity.id,
       toCityId: toCity.id,
-      travelDate,
+      travelDate: buildTravelDate(selectedDay),
     };
     onSearch(params, { from: fromCity, to: toCity });
+  };
+
+  const handleSwapCities = () => {
+    setFromCity(toCity);
+    setToCity(fromCity);
+  };
+
+  const handleSelectCity = (city: City) => {
+    if (cityPicker === 'from') {
+      setFromCity(city);
+    } else if (cityPicker === 'to') {
+      setToCity(city);
+    }
+    setCityPicker(null);
   };
 
   return (
@@ -116,37 +100,120 @@ export const FlightSearchScreen: React.FC<Props> = ({ onSearch, onOpenBookings }
           <Text style={styles.loadingText}>Loading cities...</Text>
         </View>
       ) : (
-        <View style={styles.form}>
-          <CitySelect label="From" selectedCity={fromCity} cities={cities} onSelect={setFromCity} />
-          <CitySelect label="To" selectedCity={toCity} cities={cities} onSelect={setToCity} />
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Travel date</Text>
-            <Text style={styles.helperText}>December 2025</Text>
-            <View style={styles.daysWrapper}>
-              {days.map((day) => {
-                const isSelected = day === selectedDay;
-                return (
-                  <TouchableOpacity
-                    key={day}
-                    style={[styles.dayItem, isSelected && styles.dayItemSelected]}
-                    onPress={() => setSelectedDay(day)}
-                  >
-                    <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+        <>
+          <View style={styles.form}>
+            <View style={styles.card}>
+              <View style={styles.rowGroup}>
+                <TouchableOpacity style={styles.row} onPress={() => setCityPicker('from')}>
+                  <Ionicons name="airplane-outline" size={20} color={colors.muted} style={styles.rowIcon} />
+                  <View style={styles.rowContent}>
+                    <Text style={styles.rowLabel}>From</Text>
+                    <Text style={styles.rowValue}>{formatCityDisplay(fromCity)}</Text>
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.separator} />
+                <TouchableOpacity style={styles.row} onPress={() => setCityPicker('to')}>
+                  <Ionicons name="airplane" size={20} color={colors.muted} style={styles.rowIcon} />
+                  <View style={styles.rowContent}>
+                    <Text style={styles.rowLabel}>To</Text>
+                    <Text style={styles.rowValue}>{formatCityDisplay(toCity)}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.swapButton} onPress={handleSwapCities}>
+                  <Ionicons name="swap-vertical" size={18} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.separator} />
+              <TouchableOpacity style={styles.row} onPress={() => setShowDatePicker(true)}>
+                <Ionicons name="calendar-outline" size={20} color={colors.muted} style={styles.rowIcon} />
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowLabel}>Date</Text>
+                  <Text style={styles.rowValue}>{travelDateLabel}</Text>
+                </View>
+              </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={[styles.searchButton, !isValid && styles.searchButtonDisabled]}
+              onPress={handleSearch}
+              disabled={!isValid}
+            >
+              <Text style={styles.searchButtonText}>Search flights</Text>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[styles.searchButton, !isValid && styles.searchButtonDisabled]}
-            onPress={handleSearch}
-            disabled={!isValid}
-          >
-            <Text style={styles.searchButtonText}>Search flights</Text>
-          </TouchableOpacity>
-        </View>
+          <Modal visible={cityPicker !== null} transparent animationType="fade">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{cityPicker === 'from' ? 'From city' : 'To city'}</Text>
+                  <TouchableOpacity onPress={() => setCityPicker(null)}>
+                    <Text style={styles.modalClose}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+                <FlatList
+                  data={cities}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={styles.modalItem} onPress={() => handleSelectCity(item)}>
+                      <Text style={styles.modalItemText}>{`${item.name} (${item.code})`}</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            </View>
+          </Modal>
+
+          <Modal visible={showDatePicker} transparent animationType="fade">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <View style={styles.calendarHeader}>
+                  <Text style={styles.calendarTitle}>December 2025</Text>
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                    <Text style={styles.modalClose}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.weekdayRow}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <Text key={day} style={styles.weekdayLabel}>
+                      {day}
+                    </Text>
+                  ))}
+                </View>
+                <View style={styles.calendarGrid}>
+                  {Array.from({ length: totalWeeks }).map((_, weekIndex) => {
+                    const weekDays = Array.from({ length: 7 }).map((__, dayIndex) => {
+                      const dayNumber = weekIndex * 7 + dayIndex + 1 - firstWeekdayOffset;
+                      if (dayNumber < 1 || dayNumber > daysInDecember.length) {
+                        return <View key={`empty-${weekIndex}-${dayIndex}`} style={styles.calendarCellEmpty} />;
+                      }
+
+                      const isSelected = dayNumber === selectedDay;
+
+                      return (
+                        <TouchableOpacity
+                          key={dayNumber}
+                          style={[styles.calendarCell, isSelected && styles.calendarCellSelected]}
+                          onPress={() => setSelectedDay(dayNumber)}
+                        >
+                          <Text style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
+                            {dayNumber}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    });
+
+                    return (
+                      <View key={`week-${weekIndex}`} style={styles.calendarRow}>
+                        {weekDays}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
       )}
     </View>
   );
@@ -170,54 +237,58 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  field: {
-    marginBottom: 20,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.muted,
-    marginBottom: 8,
-  },
-  helperText: {
-    color: colors.muted,
-    marginBottom: 8,
-  },
-  select: {
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: '#F9F9F9',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 24,
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  selectText: {
-    fontSize: 16,
-    color: colors.text,
+  rowGroup: {
+    position: 'relative',
   },
-  daysWrapper: {
+  row: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayItem: {
-    width: 48,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
-    marginRight: 8,
-    marginBottom: 8,
+    paddingVertical: 12,
   },
-  dayItemSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+  rowIcon: {
+    marginRight: 12,
   },
-  dayText: {
+  rowContent: {
+    flex: 1,
+  },
+  rowLabel: {
+    fontSize: 12,
     color: colors.muted,
+    marginBottom: 4,
   },
-  dayTextSelected: {
+  rowValue: {
+    fontSize: 18,
     color: colors.text,
     fontWeight: '600',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  swapButton: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    marginTop: -16,
+    backgroundColor: '#F3FDF1',
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   searchButton: {
     marginTop: 'auto',
@@ -234,17 +305,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
-  modalContent: {
+  modalCard: {
     width: '100%',
     maxHeight: '80%',
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
   },
@@ -260,7 +331,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   modalClose: {
-    color: colors.muted,
+    color: colors.accent,
+    fontWeight: '600',
   },
   modalItem: {
     paddingVertical: 12,
@@ -268,5 +340,71 @@ const styles = StyleSheet.create({
   modalItemText: {
     color: colors.text,
     fontSize: 16,
+  },
+  modalItemActive: {
+    backgroundColor: '#F3FDF1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  modalItemTextActive: {
+    fontWeight: '600',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  calendarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  weekdayLabel: {
+    flex: 1,
+    textAlign: 'center',
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginHorizontal: 4,
+  },
+  calendarGrid: {
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  calendarRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  calendarCell: {
+    flex: 1,
+    height: 44,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F6FFF4',
+  },
+  calendarCellEmpty: {
+    flex: 1,
+    height: 44,
+    marginHorizontal: 4,
+  },
+  calendarCellSelected: {
+    backgroundColor: colors.accent,
+  },
+  calendarCellText: {
+    color: colors.text,
+    fontWeight: '500',
+  },
+  calendarCellTextSelected: {
+    color: colors.text,
+    fontWeight: '700',
   },
 });
