@@ -92,17 +92,21 @@ const AppNavigation: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle='dark-content' backgroundColor={colors.background} />
-      <View style={styles.content}>{renderContent()}</View>
-      <BottomTabBar currentTab={currentTab} onSelect={setCurrentTab} />
-      {activeDetail && (
-        <View style={styles.detailOverlay}>
+      <View style={styles.content}>
+        {activeDetail ? (
           <FlightDetailScreen
             flightId={activeDetail.flightId}
             initialFlight={activeDetail.initialFlight}
             onBack={handleCloseDetail}
           />
-        </View>
-      )}
+        ) : (
+          renderContent()
+        )}
+      </View>
+      <BottomTabBar currentTab={currentTab} onSelect={(tab) => {
+        setActiveDetail(undefined);
+        setCurrentTab(tab);
+      }} />
     </SafeAreaView>
   );
 };
@@ -124,10 +128,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  detailOverlay: {
-    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.background,
   },
 });
