@@ -75,6 +75,10 @@ export const BookingProvider: React.FC<React.PropsWithChildren> = ({ children })
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const localBookings = useRef<BookingItem[]>([]);
 
+  if (!user) {
+    throw new Error('BookingProvider must be rendered with an authenticated user.');
+  }
+
   const refresh = useCallback(async () => {
     if (!supabaseConfig.isConfigured) {
       setBookings(localBookings.current);

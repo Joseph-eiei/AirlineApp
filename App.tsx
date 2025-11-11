@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
-import { SafeAreaView, StatusBar, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, StatusBar, StyleSheet, View } from 'react-native';
 
 import { Flight, FlightSearchParams } from './src/api/flights';
 import { BottomTabBar, TabKey } from './src/components/BottomTabBar';
 import { BookingProvider, useBookings } from './src/context/BookingContext';
-import { UserProvider } from './src/context/UserContext';
+import { UserProvider, useUser } from './src/context/UserContext';
 import { AccountScreen } from './src/screens/AccountScreen';
 import { BookedFlightsScreen } from './src/screens/BookedFlightsScreen';
 import { FlightDetailScreen } from './src/screens/FlightDetailScreen';
 import { FlightResultsScreen } from './src/screens/FlightResultsScreen';
 import { FlightSearchScreen } from './src/screens/FlightSearchScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
+import { SignupScreen } from './src/screens/SignupScreen';
 import { City } from './src/data/mockFlights';
 import { colors } from './src/constants/colors';
 
@@ -111,12 +113,52 @@ const AppNavigation: React.FC = () => {
   );
 };
 
+const RootNavigator: React.FC = () => {
+  const { user, status, authLoading, login, signup } = useUser();
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+
+  useEffect(() => {
+    if (user) {
+      setMode('login');
+    }
+  }, [user]);
+
+  if (status === 'checking') {
+    return (
+      <View style={styles.loadingState}>
+        <ActivityIndicator size="large" color={colors.text} />
+        <StatusBar barStyle='dark-content' backgroundColor={colors.background} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return mode === 'login' ? (
+      <LoginScreen
+        onLogin={login}
+        isLoading={authLoading}
+        onNavigateToSignup={() => setMode('signup')}
+      />
+    ) : (
+      <SignupScreen
+        onSignup={signup}
+        isLoading={authLoading}
+        onBackToLogin={() => setMode('login')}
+      />
+    );
+  }
+
+  return (
+    <BookingProvider>
+      <AppNavigation />
+    </BookingProvider>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <UserProvider>
-      <BookingProvider>
-        <AppNavigation />
-      </BookingProvider>
+      <RootNavigator />
     </UserProvider>
   );
 };
@@ -129,6 +171,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingState: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
