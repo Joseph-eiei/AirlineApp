@@ -61,7 +61,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             onChangeText={setUsername}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="e.g. traveler"
+            placeholder="Enter your username"
             placeholderTextColor={colors.muted}
             style={styles.input}
           />
